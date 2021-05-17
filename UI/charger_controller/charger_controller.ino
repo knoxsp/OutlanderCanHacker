@@ -2,10 +2,9 @@
 // If using the Arduino shield, use the tftpaint_shield.pde sketch instead!
 // DOES NOT CURRENTLY WORK ON ARDUINO LEONARDO
 
-//#include <Adafruit_GFX.h>    // Core graphics library
-//#include <Adafruit_TFTLCD.h> // Hardware-specific library
-//#include <TouchScreen.h>
-#include "Screen.h"
+#include <Adafruit_GFX.h>    // Core graphics library
+#include <Adafruit_TFTLCD.h> // Hardware-specific library
+#include <TouchScreen.h>
 
 #if defined(__SAM3X8E__)
     #undef __FlashStringHelper::F(string_literal)
@@ -50,10 +49,10 @@
 #define YM 9   // can be a digital pin
 #define XP 8   // can be a digital pin
 
-#define TS_MINX 90
-#define TS_MINY 120
-#define TS_MAXX 894
-#define TS_MAXY 940
+#define TS_MINX 130
+#define TS_MINY 90
+#define TS_MAXX 890
+#define TS_MAXY 890
 
 // For better pressure precision, we need to know the resistance
 // between X+ and X- Use any multimeter to read it
@@ -68,28 +67,23 @@ TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 #define LCD_RESET A4
 
 // Assign human-readable names to some common 16-bit color values:
-// #define	BLACK   0x0000
-// #define	BLUE    0x001F
-// #define	RED     0xF800
-// #define	GREEN   0x07E0
-// #define CYAN    0x07FF
-// #define MAGENTA 0xF81F
-// #define YELLOW  0xFFE0
-// #define WHITE   0xFFFF
+#define	BLACK   0x0000
+#define	BLUE    0x001F
+#define	RED     0xF800
+#define	GREEN   0x07E0
+#define CYAN    0x07FF
+#define MAGENTA 0xF81F
+#define YELLOW  0xFFE0
+#define WHITE   0xFFFF
 
 Adafruit_TFTLCD tft(LCD_CS, LCD_CD, LCD_WR, LCD_RD, LCD_RESET);
-int num_pages = 1;
-//HomePage hp = HomePage("Home Page", tft);
-//Page* pages[1] = {new HomePage("Home Page", tft), new NotHomePage("Not Home Page", tft)};
-Page* pages[1] = {new NotHomePage("Not Home Page", tft)};
 
-// #define BOXSIZE 50
-// #define PENRADIUS 3
+#define BOXWIDTH 160
+#define BOXHEIGHT 120
+
 int currentscreen = 0;
-int currentpage = 0;
-
-Base b = Base("I am a base");
-Derived d = Derived("I am derived");
+bool is_charging = false;
+bool hv_on = false;
 
 void setup(void) {
   Serial.begin(9600);
@@ -125,47 +119,96 @@ void setup(void) {
 
   tft.setRotation(3);
 
-  pages[0]->initialize();
-//  pages[1]->initialize();
-
-  //Serial.println(pages[0]->getButtons()[0]->name);
   currentscreen = 0;
 
   pinMode(13, OUTPUT);
 
-  //drawScreenOne();
-  pages[0]->render();
-
-  b.printName();
-
-  d.printName();
+  drawScreenOne();
 }
 
 #define MINPRESSURE 10
 #define MAXPRESSURE 1000
 
 void makeBlankScreen(){
-  return
   tft.fillScreen(BLACK);
   tft.setTextColor(WHITE);
   tft.setTextSize(3);
-  tft.fillRoundRect(200, 20, BOXSIZE*2, BOXSIZE, 5, BLUE);
 }
 
 void drawScreenOne(){
-  return
   makeBlankScreen();
   Serial.println("Drawing the text");
-  tft.setCursor(120, 160);
-  tft.println("Page 1");
+
+  drawPowerButton();
+  drawChargeButton();
 }
 
-void drawScreenTwo(){
-  return
-  makeBlankScreen();
+
+void drawPowerButton(){
+  /*draw the button which controlls the high voltage junctio box*/
+  //Draw 'power button'
+  tft.fillRect(0, 0, BOXWIDTH, BOXHEIGHT, WHITE);
   tft.setCursor(120, 160);
-  tft.println("Page 2");
 }
+
+void drawChargeButton(){
+  /*draw the button that allows the user to start and stop charging
+  This will only work if HV is activated with the other button.
+  */
+  //Draw 'power button'
+  //draw charge button
+  tft.fillRect(160, 0, BOXWIDTH, BOXHEIGHT, RED);
+  tft.setCursor(120, 160);
+}
+
+void changeHVState(){
+    /*if high-voltage is on, turn it off, and if off, turn it on*/
+    if (hv_on == true){
+      deactivateHV();
+    }else{
+      activateHV();
+    }
+}
+
+void activateHV(){
+  /*turn on the High Voltage bus*/
+  Serial.println("Activating Precharge");
+  //close the negative relay
+
+  //close the precharge relay
+
+  //wait until there is max voltage on the bus
+
+  //close the positive relay
+  hv_on = true;
+  Serial.println("Activating Precharge");
+}
+
+void deactivateHV(){
+  Serial.println("Deactivating HV");
+  //open the negative relay
+
+  //open the precharge relay
+
+  //wait until there is max voltage on the bus
+
+  //open the positive relay
+  hv_on = false;
+}
+
+void changeChargingState(){
+  //If the charger is charging, stop. Otherwise start
+  Serial.println("Changing charging state");
+  if (is_charging == true){
+    //stop sending charging messages
+    //close precharge relay??
+    is_charging = false;
+  }else{
+    //send charging messages
+    is_charging = true;
+  }
+}
+
 
 void loop()
 {
@@ -179,7 +222,7 @@ void loop()
   pinMode(YP, OUTPUT);
   //pinMode(YM, OUTPUT);
 
-  // we have some minimum pressure we consider 'valid'
+  // we have some minimum pressure we consider 'valid'}
   // pressure of 0 means no pressing!
 
   if (p.z > MINPRESSURE && p.z < MAXPRESSURE) {
@@ -191,61 +234,26 @@ void loop()
 
     Serial.print("("); Serial.print(p.x);
     Serial.print(", "); Serial.print(p.y);
-    Serial.println(")");
+    Serial.print(") --> ");
 
 
     // scale from 0->1023 to tft.width
     //TODO When the TouchScreen calibration is off, change the TS_MIN* around
     //as appropriate.
-    p.x = map(p.x, TS_MINX, TS_MAXX, 0, tft.width());
-    p.y = map(p.y, TS_MAXY, TS_MINY, tft.height(), 0);
 
-/*     Serial.print("("); Serial.print(p.x);
-     Serial.print(", "); Serial.print(p.y);
-     Serial.println(")");*/
-    int button_index = 0;
-    Page* pg = pages[currentpage];
-    for (int i=0; i<pg->getNumButtons(); i++){
-      Button* btn = pg->getButtons()[i];
-      button_index = i;
-      if (btn->is_pressed(p)){
-        Serial.println("Pressed Button ");
-        Serial.print(i);
-      }
-      break;
-    }
+    int x = map(p.y, 84, 876, 0, 320);
+    int y = map(p.x, 150, 915, 0, 240);
 
+    //p.x = map(p.y, TS_MINY, TS_MAXY, 0, tft.width());
+    //p.y = map(p.x, TS_MINX, TS_MAXX, 0, tft.height());
 
-    switch (currentpage){
-      case 0: //homepage
-        if (button_index == 0){
-          currentpage = 1;
-        }else if (button_index == 1){
-          currentpage = 2;
-        }else if (button_index = 3){
-          currentpage = 0; // change this in future.
-        }else if (button_index = 4){
-          currentpage = 0; // change this in future
-        }
-        pages[currentpage]->render();
-      case 1: //not home page
-        if (button_index == 0){
-          currentpage = 0;
-        }
-        pages[currentpage]->render();
-
-      default:
-        break;
-    }
-
-    if (p.y > 20 & p.y < 20+(BOXSIZE*2) & p.x > 20 && p.x < 20+BOXSIZE) {
-        if (currentscreen == 0){
-        //  drawScreenTwo();
-          currentscreen = 1;
-        }else{
-        //  drawScreenOne();
-          currentscreen = 0;
-        }
+    Serial.print("("); Serial.print(x);
+    Serial.print(", ");Serial.print(y);
+    Serial.println(")\n\n");
+    if (y > 0 && y < BOXHEIGHT && x > 0 && x < BOXWIDTH){
+      changeHVState();//Power button -- turn on and off HV
+    }else if (y > 0 && y < BOXHEIGHT && x > 160 && x < (160 + BOXWIDTH)){
+        changeChargingState(); // start or stop charging
     }
   }
 }
